@@ -15,6 +15,32 @@ Phased up to read length (100bp) level.
 - Heng recommends building database using the GRC38 contigs, mapping to this. 
 
 
+1. Heng has aligned mag files to reference genome (including all GRC38 MHC haplotypes) 
+   + HLA sequences from IMGT
+
+2. Pull out contigs that align to any MHC sequences / haplotypes:
+  run_get_sgdp_mhc_contigs.sh
+
+3. Re-align contigs to GRC38, using ONLY single reference MHC haplotype 
+   so that all sequences are in same coord system:
+  align_mhc_contigs.sh
+  sam_to_sorted_bam.sh
+
+4? Compare base calls to those from VCF?
+
+5. Pull out contigs that overlap each exon.
+
+6. Build multiple alignment of exon contigs.
+
+7. Tree building using with Mr. Bayes?
+
+
+
+
+
+
+----------------
+
 1. Map all contigs to reference haplotypes to pull out set that 
    are MHC contigs. In addition to MHC haplotypes also include the entire 
    region of MHC + some flanking.

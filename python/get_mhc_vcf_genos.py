@@ -187,15 +187,8 @@ def main():
     shape = (n_sites, n_samp)
     carray = h5f.createCArray(h5f.root, "gtypes", atom, shape,
                               filters=tables.Filters(complevel=1, complib="zlib"))
-        
-    #gtypes = pd.DataFrame(np.zeros((n_sites, n_samp), dtype=np.int), 
-    #                      columns=[s.samp_id for s in samples])
-
-    # gtypes.loc[:, :] = SNP_UNDEF
     
     for i in range(n_samp):
-    # for i in range(1):
-    
         samp = samples[i]
 
         path = samp.prefix + "." + options.chrom + ".filtered.vcf.gz"
