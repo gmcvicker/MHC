@@ -36,9 +36,6 @@ Phased up to read length (100bp) level.
 
 
 
-
-
-
 ----------------
 
 1. Map all contigs to reference haplotypes to pull out set that 
