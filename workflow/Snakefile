@@ -1,0 +1,46 @@
+
+import os
+
+DATA_DIR="/mnt/gluster/data/internal_supp/MHC/MiSeq_151005/"
+TRIM_DIR=DATA_DIR + "trim/"
+
+if not os.path.exists(TRIM_DIR):
+    os.makedirs(TRIM_DIR)
+
+
+def get_prefix():
+    """Gets the unique prefixes of the fastq files in the data directory"""
+    pfx = set([])
+    
+    for name in os.listdir(DATA_DIR):
+        m = re.match("(.*)_R1_001.fastq.gz", name)
+        if m:
+            pfx.add(m.groups()[0])
+
+    return pfx
+
+
+
+rule all:
+     input:
+         expand(TRIM_DIR + "{prefix}_R1_001_val_1.fq.gz", prefix=get_prefix()),
+         expand(TRIM_DIR + "{prefix}_R2_001_val_2.fq.gz", prefix=get_prefix())
+
+rule trim_reads:
+    input:
+        DATA_DIR + "{prefix}_R1_001.fastq.gz",
+        DATA_DIR + "{prefix}_R2_001.fastq.gz",
+    output:
+        TRIM_DIR + "{prefix}_R1_001_val_1.fq.gz",
+        TRIM_DIR + "{prefix}_R2_001_val_2.fq.gz"
+    shell:
+        "trim_galore --length 20"
+        "  --output_dir {trim_dir} "
+        "  --clip_R1 20 "
+        "  --clip_R2 20 "
+        "  --paired "
+        "  --trim1 "
+        "  --quality 30 {{input}}".format(trim_dir=TRIM_DIR)
+
+
+        
