@@ -39,12 +39,17 @@ class Alignment(object):
                 # start of new alignment block
                 in_header = True
                 header_line = 0
+                aln_type = ""
                 i = 0
-                # each alignment block header looks like this:
+                # each alignment block header looks like this for cDNA alignments:
+                #   cDNA              76
+                #   AA codon          -4
+                #                     |
                 #
-                # cDNA              76
-                # AA codon          -4
-                #                   |                
+                # and like this for genomic DNA alignemnts:
+                #   gDNA              -300
+                #                     |
+                #
             elif in_header:
                 header_line += 1
                 if header_line == 1:
@@ -52,17 +57,25 @@ class Alignment(object):
                         # end of file
                         break
                     elif line.startswith("cDNA"):
-                        pass
+                        aln_type = "cDNA"
+                    elif line.startswith("gDNA"):
+                        aln_type = "gDNA"
                     else:
                         raise ValueError("expected line to start with"
-                                         "'cDNA':\n'%s'\n" % line)
+                                         "'cDNA' or 'gDNA':\n'%s'\n" % line)
                     # sys.stderr.write("%s\n" % line)
                 elif header_line == 2:
-                    if not line.startswith("AA"):
-                        raise ValueError("expected line to start with 'AA'")
+                    if aln_type == "cDNA":
+                        if not line.startswith("AA"):
+                            raise ValueError("expected line to start with 'AA'")
+                    elif aln_type == "gDNA":
+                        # last line of gDNA header
+                        in_header =False
                     # sys.stderr.write("%s\n" % line)
+                    else:
+                        raise ValueError("unknown alignment type '%s'" % aln_type)
                 elif header_line == 3:
-                    # last line of header
+                    # last line of cDNA header
                     in_header = False
             else:
                 # we are in alignment block
@@ -124,6 +137,29 @@ class Alignment(object):
             handle.write("%s %s\n" % (self.seq_names[i], 
                                       nuc_sep.join( self.seqs[i])))
 
+
+    def write_fasta(self, handle, line_width=60):
+        
+        for i in range(self.n_seq):
+            handle.write(">%s\n" % self.seq_names[i])
+
+            seq_str = "".join(self.seqs[i])
+
+            # remove gaps
+            seq_str = seq_str.replace(".", "")
+
+            # remove exon boundaries
+            seq_str = seq_str.replace("|", "")
+
+            # and switch missing nucleotides from * to N
+            seq_str = seq_str.replace("*", "N")
+
+            for p in xrange(0, len(seq_str), line_width):
+                handle.write(seq_str[p:p+line_width] + "\n")
+
+    
+            
+
             
     def split_by_exon(self):
         # exons are indicated by '|'
@@ -152,66 +188,5 @@ class Alignment(object):
         return exons
         
                 
-
-
-
-def parse_options():
-    parser = argparse.ArgumentParser()
-    
-    parser.add_argument("output_dir")
-    parser.add_argument("--gene", default="DRB")
-
-    options = parser.parse_args()
-
-    return options
-    
-
-
-def write_exons(options, exons):
-
-    exon_number = 0
-    
-    for ex in exons:
-        exon_number += 1
-
-        out_filename = "%s/%s_exon%d.txt" % \
-          (options.output_dir, options.gene, exon_number)
-
-        sys.stderr.write("writing to file %s\n" % out_filename)
-
-        out_f = open(out_filename, "w")
-        ex.write(out_f, nuc_sep=" ")
-        out_f.close()
-    
-    
-
-    
-
-def make_diff_matrix(aln):
-    seq_array = np.array(aln.seqs)
-    
-    ##### Currently not used
-    diff_matrix = np.zeros((aln.n_seq, aln.n_seq))
-    for i in range(aln.n_seq):
-        for j in range(i):
-            # don't want untyped sites, which are flagged with '*'
-            subset = (seq_array[i,] != '*') | (seq_array[j,] != '*')
-
-            diff_matrix[i,j] = np.sum(seq_array[i,subset] != seq_array[j,])
-            diff_matrix[j,i] = diff_matrix[i,j]
-
-
-
-options = parse_options()
-
-filename = "/home/gm114/data/IMGT/alignments/" + options.gene + "_nuc.txt"
-
-aln = Alignment()
-aln.read_alignment(filename)
-# aln.write(sys.stdout)
-exons = aln.split_by_exon()
-
-write_exons(options, exons)
-
 
 
