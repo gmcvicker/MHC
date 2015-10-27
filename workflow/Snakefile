@@ -2,7 +2,7 @@ import os
 
 configfile: "config.json"
 
-
+SCRIPT_DIR="/home/gmcvicker/proj/MHC/python/"
 
 def get_prefix():
     """Gets the unique prefixes of the fastq files in the data directory"""
@@ -19,7 +19,8 @@ def get_prefix():
 
 rule all:
      input:
-        expand(config['mhc_dir'] + "velvet/{prefix}/contigs.blast", prefix=get_prefix()),
+        config['mhc_dir'] + "velvet/blast_contigs_summary.txt",
+        # expand(config['mhc_dir'] + "velvet/{prefix}/contigs.blast.gz", prefix=get_prefix()),
         # expand(config['mhc_dir'] + "velvet/{prefix}/contigs.fa", prefix=get_prefix()),
         # "{d}/{assembly}/{assembly}.fa.nin".format(d=config['genome']['dir'],
         #                                          assembly=config['genome']['assembly'])
@@ -94,12 +95,21 @@ rule blast_contigs:
         index="{d}/{assembly}/{assembly}.fa.nin".format(d=config['genome']['dir'],
                                                         assembly=config['genome']['assembly'])
     output:
-        config['mhc_dir'] + "velvet/{prefix}/contigs.blast"
+        config['mhc_dir'] + "velvet/{prefix}/contigs.blast.gz"
     shell:
-        'echo CMD: "blastn -query {input.query} -db {input.db}";'
-        "blastn -query {input.query} -db {input.db} > {output}"
+        'echo CMD: "blastn -query -outfmt 6 {input.query} -db {input.db}";'
+        "blastn -outfmt 6 -query {input.query} -db {input.db} | gzip > {output}"
+
 
         
+rule summarize_blast_contigs:
+    input:
+        expand(config['mhc_dir'] + "velvet/{prefix}/contigs.blast.gz", prefix=get_prefix())
+    output:
+        config['mhc_dir'] + "velvet/blast_contigs_summary.txt.gz"
+    run:
+        shell("python " + SCRIPT_DIR + "assembled_contig_stats.py {input} | gzip > {output}")
+
         
         
         
