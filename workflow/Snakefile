@@ -1,0 +1,118 @@
+import os
+
+configfile: "config.json"
+
+SCRIPT_DIR="/home/gmcvicker/proj/MHC/python/"
+
+def get_prefix():
+    """Gets the unique prefixes of the fastq files in the data directory"""
+    pfx = set([])
+    
+    for name in os.listdir(config['mhc_dir']):
+        m = re.match("(.*)_R1_001.fastq.gz", name)
+        if m:
+            pfx.add(m.groups()[0])
+
+    return pfx
+
+
+
+rule all:
+     input:
+        config['mhc_dir'] + "velvet/blast_contigs_summary.txt",
+        # expand(config['mhc_dir'] + "velvet/{prefix}/contigs.blast.gz", prefix=get_prefix()),
+        # expand(config['mhc_dir'] + "velvet/{prefix}/contigs.fa", prefix=get_prefix()),
+        # "{d}/{assembly}/{assembly}.fa.nin".format(d=config['genome']['dir'],
+        #                                          assembly=config['genome']['assembly'])
+
+        
+rule trim_reads:
+    input:
+        config['mhc_dir'] + "{prefix}_R1_001.fastq.gz",
+        config['mhc_dir'] + "{prefix}_R2_001.fastq.gz",
+    output:
+        config['mhc_dir'] + "trim/{prefix}_R1_001_val_1.fq.gz",
+        config['mhc_dir'] + "trim/{prefix}_R2_001_val_2.fq.gz"
+    run:
+        if not os.path.exists(config['mhc_dir'] + "trim"):
+            os.makedirs(config['mhc_dir'] + "trim")
+        shell("trim_galore --length 32"
+              "  --output_dir {trim_dir} "
+              "  --clip_R1 20 "
+              "  --clip_R2 20 "
+              "  --paired "
+              "  --trim1 "
+              "  --quality 30 {{input}}".format(trim_dir=config['mhc_dir'] + "trim"))
+
+
+        
+rule velvet:
+    input:
+        config['mhc_dir'] + "trim/{prefix}_R1_001_val_1.fq.gz",
+        config['mhc_dir'] + "trim/{prefix}_R2_001_val_2.fq.gz"
+    output:
+         config['mhc_dir'] + "velvet/{prefix}/contigs.fa"
+    run:
+        out_dir = config['mhc_dir'] + "velvet/{wildcards.prefix}"
+        hash_len = 31
+        ins_len = 1000
+        shell("velveth {out_dir} {hash_len} -fastq.gz -separate "
+              "{file1} {file2}".format(out_dir=out_dir, hash_len=hash_len,
+                                       file1=input[0], file2=input[1]))
+
+        shell("velvetg {out_dir} -ins_length 1000 -exp_cov 50 "
+              "-min_contig_lgth 500".format(out_dir=out_dir))
+        
+
+rule download_ref_genome:
+    output:
+        "{d}/{assembly}/{assembly}.fa".format(d=config['genome']['dir'],
+                                              assembly=config['genome']['assembly'])
+    shell:
+        "curl {url}/{assembly}.fa.gz | "
+        "gunzip -c > {d}/{assembly}/{assembly}.fa".format(url=config['genome']['url'],
+                                                          assembly=config['genome']['assembly'],
+                                                          d=config['genome']['dir'])
+
+
+
+rule make_blast_db:
+    input:
+        "{d}/{assembly}/{assembly}.fa".format(d=config['genome']['dir'],
+                                              assembly=config['genome']['assembly'])
+    output:
+        expand("{{input}}.{type}", type=['nin', 'nhr', 'nog', 'nsd', 'nsi', 'nsq'])
+    shell:
+        "makeblastdb -in {input} -dbtype nucl -parse_seqids"
+        
+
+
+rule blast_contigs:
+    input:
+        db="{d}/{assembly}/{assembly}.fa".format(d=config['genome']['dir'],
+                                                 assembly=config['genome']['assembly']),
+        query=config['mhc_dir'] + "velvet/{prefix}/contigs.fa",
+        index="{d}/{assembly}/{assembly}.fa.nin".format(d=config['genome']['dir'],
+                                                        assembly=config['genome']['assembly'])
+    output:
+        config['mhc_dir'] + "velvet/{prefix}/contigs.blast.gz"
+    shell:
+        'echo CMD: "blastn -query -outfmt 6 {input.query} -db {input.db}";'
+        "blastn -outfmt 6 -query {input.query} -db {input.db} | gzip > {output}"
+
+
+        
+rule summarize_blast_contigs:
+    input:
+        expand(config['mhc_dir'] + "velvet/{prefix}/contigs.blast.gz", prefix=get_prefix())
+    output:
+        config['mhc_dir'] + "velvet/blast_contigs_summary.txt.gz"
+    run:
+        shell("python " + SCRIPT_DIR + "assembled_contig_stats.py {input} | gzip > {output}")
+
+        
+        
+        
+        
+
+        

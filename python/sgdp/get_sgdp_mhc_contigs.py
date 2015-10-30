@@ -49,9 +49,14 @@ def main():
 
     for ref in mhc_ref_names:
         for read in bamfile.fetch(ref):
+            # pysam repeats reads, possibly for printing PE reads,
+            # should fix this so only written once
             sys.stdout.write("@%s %s\n%s\n+\n%s\n" % (read.qname, sample_id, 
                                                       read.query, 
                                                       read.qqual))
+                
+
+            
     bamfile.close()
     
 

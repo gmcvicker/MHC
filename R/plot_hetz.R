@@ -80,20 +80,41 @@ plot.genes <- function(gene.tab, exon.tab,
 
 
 
-# build table of heterozygosity for each of the populations
+## # build table of heterozygosity for each of the populations
+## hetz.tab <- NULL
+
+## for(region in regions) {
+##     cat(region, "\n")
+##     filename <- paste("/home/gm114/data/SGDP/mhc_hetz.", region, ".txt.gz", sep="")
+##     tab <- read.table(filename)
+
+##     if(is.null(hetz.tab)) {
+##         hetz.tab <- data.frame(POS=tab$V1)
+##     }
+
+##     hetz.tab[[region]] <- tab$V2
+## }
+
+
 hetz.tab <- NULL
 
-for(region in regions) {
-    cat(region, "\n")
-    filename <- paste("/home/gm114/data/SGDP/mhc_hetz.", region, ".txt.gz", sep="")
+species.tab <- read.table("~/data/great_ape_genome_project/species.txt")
+species <- as.character(species.tab$V1)
+
+for(sp in species) {
+    cat(sp, "\n")
+    filename <- paste("~/data/great_ape_genome_project/mhc_hetz.", sp, ".txt.gz",
+                      sep="")
     tab <- read.table(filename)
 
     if(is.null(hetz.tab)) {
         hetz.tab <- data.frame(POS=tab$V1)
     }
-
-    hetz.tab[[region]] <- tab$V2
+    hetz.tab[[sp]] <- tab$V2
 }
+
+
+
 
 
 mhc.start <- 28000000
@@ -101,12 +122,14 @@ pos <- hetz.tab$POS + mhc.start - 1
 mhc.end <- max(pos)
 
 
+types <- names(hetz.tab)[2:ncol(hetz.tab)]
+
 win.size <- 1000
 smooth.hetz.tab <- data.frame(hetz.tab)
-for(region in regions) {
-    cat(region)
+for(type in types) {
+    cat(type, "\n")
     
-    smooth.hetz.tab[,region] <- filter(hetz.tab[,region],
+    smooth.hetz.tab[,type] <- filter(hetz.tab[,type],
                                        rep(1, win.size)) / win.size
 }
 
@@ -130,12 +153,13 @@ segments.tab <-
 
 
 library(RColorBrewer)
-region.colors <- brewer.pal(length(regions), "Set1")
+type.colors <- brewer.pal(length(types), "Set1")
 
 for(seg in 1:nrow(segments.tab)) {
     segname <- segments.tab$NAME[seg]
     
-    png(paste("mhc_hetz.", segname, ".png", sep=""),  width=1000, height=500)
+    # png(paste("mhc_hetz.", segname, ".png", sep=""),  width=1000, height=500)
+    pdf(paste("mhc_hetz.", segname, ".pdf", sep=""),  width=10, height=5)
 
     xlim <- c(segments.tab$START[seg], segments.tab$END[seg])
             
@@ -155,14 +179,14 @@ for(seg in 1:nrow(segments.tab)) {
     text(mid, y=y, labels=as.character(classic.loci.tab$GENE.NAME),
          pos=1, col=as.character(classic.loci.tab$COLOR))
     
-    # plot diversity for each geographic region
-    for(i in 1:length(regions)) {
-        region <- regions[i]
-        lines(pos, smooth.hetz.tab[[region]], col=region.colors[i])
+    # plot diversity for each geographic type
+    for(i in 1:length(types)) {
+        type <- types[i]
+        lines(pos, smooth.hetz.tab[[type]], col=type.colors[i])
     }
 
 
-    legend("topleft", legend=regions, col=region.colors, lty=1, bg="white")
+    legend("topleft", legend=types, col=type.colors, lty=1, bg="white")
     
     dev.off()    
 }
