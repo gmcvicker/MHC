@@ -4,6 +4,8 @@ configfile: "config.json"
 
 SCRIPT_DIR="/home/gmcvicker/proj/MHC/python/"
 
+
+
 def get_prefix():
     """Gets the unique prefixes of the fastq files in the data directory"""
     pfx = set([])
@@ -19,11 +21,21 @@ def get_prefix():
 
 rule all:
      input:
-        config['mhc_dir'] + "velvet/blast_contigs_summary.txt",
-        # expand(config['mhc_dir'] + "velvet/{prefix}/contigs.blast.gz", prefix=get_prefix()),
-        # expand(config['mhc_dir'] + "velvet/{prefix}/contigs.fa", prefix=get_prefix()),
-        # "{d}/{assembly}/{assembly}.fa.nin".format(d=config['genome']['dir'],
-        #                                          assembly=config['genome']['assembly'])
+        config["mhc_dir"] + "velvet/blast_contigs_summary.txt.gz",
+
+
+
+rule summarize_blast_contigs:
+    input:
+        expand(config['mhc_dir'] + "velvet/{prefix}/contigs.blast.gz",
+               prefix=get_prefix())
+    output:
+        config['mhc_dir'] + "velvet/blast_contigs_summary.txt.gz"
+    run:
+        "python " + SCRIPT_DIR + "assembled_contig_stats.py {input} | gzip > {output}"
+
+        
+
 
         
 rule trim_reads:
@@ -63,56 +75,52 @@ rule velvet:
         shell("velvetg {out_dir} -ins_length 1000 -exp_cov 50 "
               "-min_contig_lgth 500".format(out_dir=out_dir))
         
-
+        
+        
 rule download_ref_genome:
     output:
-        "{d}/{assembly}/{assembly}.fa".format(d=config['genome']['dir'],
-                                              assembly=config['genome']['assembly'])
+        config['genome']['path']
     shell:
-        "curl {url}/{assembly}.fa.gz | "
-        "gunzip -c > {d}/{assembly}/{assembly}.fa".format(url=config['genome']['url'],
-                                                          assembly=config['genome']['assembly'],
-                                                          d=config['genome']['dir'])
+        "curl " + config['genome']['url'] + " | gunzip -c > {output}"
 
 
 
 rule make_blast_db:
+    """Builds a BLAST database for the human genome. Could be modified
+    to include sequences from IMGT"""
     input:
-        "{d}/{assembly}/{assembly}.fa".format(d=config['genome']['dir'],
-                                              assembly=config['genome']['assembly'])
+        config['genome']['path']
     output:
         expand("{{input}}.{type}", type=['nin', 'nhr', 'nog', 'nsd', 'nsi', 'nsq'])
     shell:
         "makeblastdb -in {input} -dbtype nucl -parse_seqids"
         
+        
 
-
-rule blast_contigs:
+rule combine_IMGT_genome:
+    """Combine the genome fasta file with sequences from IMGT."""
     input:
-        db="{d}/{assembly}/{assembly}.fa".format(d=config['genome']['dir'],
-                                                 assembly=config['genome']['assembly']),
+        config['genome']['path'],
+        config['imgt_dir'] + "/extracted/genomic_seqs/combined.fasta"
+    output:
+        config['genome']['imgt_path']
+    shell:
+        "cat {input} > {output}"
+
+
+
+
+rule blast_velvet_contigs:
+    input:
+        db=config['genome']['path'],
         query=config['mhc_dir'] + "velvet/{prefix}/contigs.fa",
-        index="{d}/{assembly}/{assembly}.fa.nin".format(d=config['genome']['dir'],
-                                                        assembly=config['genome']['assembly'])
+        index=config['genome']['path'] + ".nin"
     output:
         config['mhc_dir'] + "velvet/{prefix}/contigs.blast.gz"
     shell:
-        'echo CMD: "blastn -query -outfmt 6 {input.query} -db {input.db}";'
         "blastn -outfmt 6 -query {input.query} -db {input.db} | gzip > {output}"
 
-
-        
-rule summarize_blast_contigs:
-    input:
-        expand(config['mhc_dir'] + "velvet/{prefix}/contigs.blast.gz", prefix=get_prefix())
-    output:
-        config['mhc_dir'] + "velvet/blast_contigs_summary.txt.gz"
-    run:
-        shell("python " + SCRIPT_DIR + "assembled_contig_stats.py {input} | gzip > {output}")
-
-        
-        
+    
         
         
 
-        

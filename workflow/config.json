@@ -1,8 +1,0 @@
-{
-    "mhc_dir" : "/mnt/gluster/data/internal_supp/MHC/MiSeq_151005/",
-    "genome" : {
-	"assembly" : "hg38",
-	"url" : "http://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/",
-	"dir" : "/mnt/gluster/data/external_public_supp/reference_genomes"
-    }
-}

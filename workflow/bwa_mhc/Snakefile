@@ -1,0 +1,137 @@
+import os
+
+configfile: "config.json"
+
+SCRIPT_DIR="/home/gmcvicker/proj/MHC/python/"
+
+
+
+def get_prefix():
+    """Gets the unique prefixes of the fastq files in the data directory"""
+    pfx = set([])
+    
+    for name in os.listdir(config['mhc_dir']):
+        m = re.match("(.*)_R1_001.fastq.gz", name)
+        if m:
+            pfx.add(m.groups()[0])
+
+    return pfx
+
+
+
+
+rule all:
+     input:
+        config["mhc_dir"] + "combined_read_counts.txt",
+        config['mhc_dir'] + "bwa/read_map_stats.txt.gz",
+
+
+        
+rule trim_reads:
+    input:
+        config['mhc_dir'] + "{prefix}_R1_001.fastq.gz",
+        config['mhc_dir'] + "{prefix}_R2_001.fastq.gz",
+    output:
+        config['mhc_dir'] + "trim/{prefix}_R1_001_val_1.fq.gz",
+        config['mhc_dir'] + "trim/{prefix}_R2_001_val_2.fq.gz"
+    run:
+        if not os.path.exists(config['mhc_dir'] + "trim"):
+            os.makedirs(config['mhc_dir'] + "trim")
+        shell("trim_galore --length 32"
+              "  --output_dir {trim_dir} "
+              "  --clip_R1 20 "
+              "  --clip_R2 20 "
+              "  --paired "
+              "  --trim1 "
+              "  --quality 30 {{input}}".format(trim_dir=config['mhc_dir'] + "trim"))
+
+
+        
+        
+rule count_reads:
+    input:
+        config['mhc_dir'] + "{prefix}_R1_001.fastq.gz"
+    output:
+        config["mhc_dir"] + "{prefix}_read_counts.txt"
+    shell:
+        "gunzip -c {input} | echo $((`wc -l`/4)) > {output}"
+
+
+rule combine_read_counts:
+    input:
+        expand(config['mhc_dir'] + "{prefix}_read_counts.txt", prefix=get_prefix())
+    output:
+        config["mhc_dir"] + "combined_read_counts.txt"
+    shell:
+        "python " + SCRIPT_DIR + "combine_read_count_files.py {input} > {output}"
+        
+
+        
+rule download_ref_genome:
+    output:
+        config['genome']['path']
+    shell:
+        "curl " + config['genome']['url'] + " | gunzip -c > {output}"
+
+
+rule make_blast_db:
+    """Builds a BLAST database for the human genome. Could be modified
+    to include sequences from IMGT"""
+    input:
+        config['genome']['path']
+    output:
+        expand("{{input}}.{type}", type=['nin', 'nhr', 'nog', 'nsd', 'nsi', 'nsq'])
+    shell:
+        "makeblastdb -in {input} -dbtype nucl -parse_seqids"
+        
+        
+
+rule combine_IMGT_genome:
+    """Combine the genome fasta file with sequences from IMGT."""
+    input:
+        config['genome']['path'],
+        config['imgt_dir'] + "/extracted/genomic_seqs/combined.fasta"
+    output:
+        config['genome']['imgt_path']
+    shell:
+        "cat {input} > {output}"
+
+
+rule bwa_index:
+    """makes index file for BWA from IMGT/reference genome"""
+    input:
+        config['genome']['imgt_path']
+    output:
+        config['genome']['imgt_path'] + ".bwt"
+    shell:
+        "bwa index {input}"
+
+
+
+rule bwa_mem_align:
+    """align trimmed MHC reads to reference genome + IMGT with BWA mem"""
+    input:
+        genome=config['genome']['imgt_path'],
+        index=config['genome']['imgt_path'] + ".bwt",
+        read1=config['mhc_dir'] + "trim/{prefix}_R1_001_val_1.fq.gz",
+        read2=config['mhc_dir'] + "trim/{prefix}_R2_001_val_2.fq.gz"
+    output:
+        config['mhc_dir'] + "bwa/{prefix}.bam"
+    shell:
+        "mkdir -p " + config['mhc_dir'] + "bwa ;"
+        "bwa mem {input.genome} {input.read1} {input.read2} "
+        "| samtools view -Sbh - > {output}"
+
+
+rule summarize_bam_reads:
+    """count number of reads mapping to MHC / other contigs"""
+    input:
+        expand(config['mhc_dir'] + "bwa/{prefix}.bam", prefix=get_prefix())
+    output:
+        config['mhc_dir'] + "bwa/read_map_stats.txt.gz"
+    shell:
+        "python " + SCRIPT_DIR + "read_map_stats.py {input} | gzip > {output}"
+
+
+        
+
