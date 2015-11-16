@@ -1,0 +1,19 @@
+{
+    "script_dir" : "/home/gmcvicker/proj/MHC",
+    "mhc_dir" : "/mnt/gluster/data/internal_supp/MHC/MiSeq_151005/",
+    "imgt_dir" : "/mnt/gluster/data/external_public_supp/IMGT/",
+    "imgt_gseq_dir" : "/mnt/gluster/data/external_public_supp/IMGT/extracted/genomic_seqs/",
+    "genome" : {
+	"assembly" : "hg38",
+	"url" : "http://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.fa.gz",
+	"path" : "/mnt/gluster/data/external_public_supp/reference_genomes/hg38/hg38.fa",
+	"imgt_path" : "/mnt/gluster/data/external_public_supp/reference_genomes/hg38/hg38_IMGT.fa"
+    },
+    "cortex" : {
+	"path" : "/home/gmcvicker/CORTEX_release_v1.0.5.21",
+	"max_k" : 63,
+	"kmer_size" : 61,
+	"max_colors" : 30,
+	"output_dir" : "/mnt/gluster/data/internal_supp/MHC/cortex"
+    }
+}
