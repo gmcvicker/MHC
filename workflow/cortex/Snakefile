@@ -1,28 +1,56 @@
 import os
+import glob
 
 configfile: "config.json"
 
 
+### Read information about fastq files
+FASTQ_READ1 = {}
+FASTQ_READ2 = {}
+PILOT_LOCI = set([])
+PILOT_SHORT_IDS = set([])
 
-if not os.path.exists(config['cortex']['output_dir']):
-    os.makedirs(config['cortex']['output_dir'])
+for path in glob.glob(config['mhc_dir'] + 'trim/*_R1_*.fq.gz'):
+    pfx = path.split("/")
+    filename = pfx[-1]
+    dirs = pfx[:-1]
+    if filename.startswith("Undetermined"):
+        continue
 
+    words = filename.split("_", 1)
+    short_id, locus = words[0].split("-", 1)
+    PILOT_SHORT_IDS.add(short_id)
+    PILOT_LOCI.add(locus)
 
-
-IMGT_LOCUS, IMGT_ALLELE = glob_wildcards(config['imgt_gseq_dir'] + "{locus}/{allele}.fasta")
+    FASTQ_READ1[short_id + "-" + locus] = path
+    FASTQ_READ2[short_id + "-" + locus] = path.replace("_R1_", "_R2_").replace("_val_1", "_val_2")
+      
     
-for l, a in zip(IMGT_LOCUS, IMGT_ALLELE):
-    sys.stderr.write("%s %s\n" % (l, a))
+if not os.path.exists(config['cortex']['imgt_output_dir']):
+    os.makedirs(config['cortex']['imgt_output_dir'])
 
+if not os.path.exists(config['cortex']['pilot_output_dir']):
+    os.makedirs(config['cortex']['pilot_output_dir'])
+    
+
+
+
+IMGT_LOCUS, IMGT_ALLELE = glob_wildcards(config['imgt_gseq_dir'] + "{imgt_locus}/{imgt_allele}.fasta")
+
+    
 
 rule all:
      input:
         expand(config['cortex']['path'] + "/bin/cortex_var_" + \
                str(config['cortex']['max_k']) + "_c{n_colors}",
                n_colors=[str(x) for x in range(1, config['cortex']['max_colors']+1)]),
-        expand(config['cortex']['output_dir'] + "/{locus}_{allele}.ctx",
-               zip, locus=IMGT_LOCUS, allele=IMGT_ALLELE)
-        
+        expand(config['cortex']['imgt_output_dir'] +
+               "{imgt_locus}_{imgt_allele}.ctx",
+               zip, imgt_locus=IMGT_LOCUS, imgt_allele=IMGT_ALLELE),
+
+        expand(config['cortex']['pilot_output_dir'] +
+               "{pilot_short_id}_{pilot_locus}.ctx",
+               pilot_short_id=PILOT_SHORT_IDS, pilot_locus=PILOT_LOCI)
 
         
 rule trim_reads:
@@ -57,16 +85,16 @@ rule build_cortex:
 
 
 
-rule make_cortex_color_binaries:
+rule make_imgt_cortex_color_binaries:
     """make a single color binary for each IMGT fasta file"""
     input:
         # for this task use the cortex binary that is compiled for 1 color
         cortex=config['cortex']['path'] + "/bin/cortex_var_" + \
                       str(config['cortex']['max_k']) + "_c1",
-        fasta=config['imgt_gseq_dir'] + "{locus}/{allele}.fasta"
+        fasta=config['imgt_gseq_dir'] + "{imgt_locus}/{imgt_allele}.fasta"
     output:
-        ctx=config['cortex']['output_dir'] + "{locus}_{allele}.ctx",
-        se_list=temp(config['cortex']['output_dir'] + "{locus}_{allele}.se_list.txt")
+        ctx=config['cortex']['imgt_output_dir'] + "{imgt_locus}_{imgt_allele}.ctx",
+        se_list=temp(config['cortex']['imgt_output_dir'] + "{imgt_locus}_{imgt_allele}.se_list.txt")
     shell:
         "echo '{input.fasta}' > '{output.se_list}'; "
         "{input.cortex} --se_list '{output.se_list}' "
@@ -74,10 +102,38 @@ rule make_cortex_color_binaries:
         "--mem_width 100 "
         "--kmer_size " + str(config['cortex']['kmer_size']) + " " +
         "--dump_binary '{output.ctx}' " + 
-        "--sample_id '{wildcards.allele}'"
-    
-    
+        "--sample_id '{wildcards.imgt_allele}'"
 
+
+
+
+rule make_pilot_cortex_color_binaries:
+    """make a single color binary for each IMGT fasta file"""
+    input:
+        # for this task use the cortex binary that is compiled for 1 color
+        cortex=config['cortex']['path'] + "/bin/cortex_var_" + \
+                      str(config['cortex']['max_k']) + "_c1",
+        read1=lambda wildcards: FASTQ_READ1[wildcards.pilot_short_id + "-" +
+                                            wildcards.pilot_locus],
+        read2=lambda wildcards: FASTQ_READ2[wildcards.pilot_short_id + "-" +
+                                            wildcards.pilot_locus]
+                                            
+    output:
+        ctx=config['cortex']['pilot_output_dir'] + "{pilot_short_id}_{pilot_locus}.ctx",
+        pe_list1=temp(config['cortex']['pilot_output_dir'] + "{pilot_short_id}_{pilot_locus}.pe_list1.txt"),
+        pe_list2=temp(config['cortex']['pilot_output_dir'] + "{pilot_short_id}_{pilot_locus}.pe_list2.txt")
+                             
+    shell:
+        "echo '{input.read1}' > '{output.pe_list1}'; "
+        "echo '{input.read2}' > '{output.pe_list2}'; "
+        "{input.cortex} --pe_list '{output.pe_list1},{output.pe_list2}' "
+        "--mem_height 20 "
+        "--mem_width 100 "
+        "--kmer_size " + str(config['cortex']['kmer_size']) + " " +
+        "--dump_binary '{output.ctx}' " + 
+        "--sample_id '{wildcards.pilot_short_id}-{wildcards.pilot_locus}'"
+
+    
     
         
         
